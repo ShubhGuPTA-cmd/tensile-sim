@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Composite Tensile Test Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect x=%277%27 y=%271%27 width=%272%27 height=%2714%27 fill=%27%231d5fd1%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Composite Tensile Test Simulator</h1>
+    <p class="sub">Choose a matrix, reinforcement and test conditions, run the virtual universal testing machine, and read off modulus, strength and strain at failure.</p>
+  </div>
+  <label class="preset">Load a test condition from the plan
+    <select id="preset"></select>
+  </label>
+</header>
+
+<main class="layout">
+  <!-- ===================== INPUTS ===================== -->
+  <aside class="panel inputs" aria-label="Input parameters">
+    <section>
+      <h2>1. Materials</h2>
+      <label>Matrix
+        <select id="matrix" data-in></select>
+      </label>
+      <p class="hint" id="matrixInfo"></p>
+      <label>Reinforcement
+        <select id="fibre" data-in></select>
+      </label>
+      <p class="hint" id="fibreInfo"></p>
+    </section>
+
+    <section>
+      <h2>2. Reinforcement content</h2>
+      <div class="pair">
+        <label>Fibre volume fraction, Vf (%)
+          <input type="range" id="vf" data-in min="0" max="70" step="0.5">
+        </label>
+        <input type="number" id="vf_n" data-in="vf" min="0" max="80" step="0.5" aria-label="Vf number">
+      </div>
+      <p class="hint">Weight fraction <b id="wfOut">-</b> · composite density <b id="rhoOut">-</b>. Vf = 0 gives the neat polymer.</p>
+      <details>
+        <summary>Estimate Vf from the lay-up</summary>
+        <div class="grid2">
+          <label>Plies<input type="number" id="lay_n" value="3" min="1" step="1"></label>
+          <label>Fibre areal weight (g/m²)<input type="number" id="lay_faw" value="300" min="10" step="10"></label>
+        </div>
+        <p class="hint">Uses the specimen thickness below: Vf = n·Aw / (ρf·t). <b id="layOut"></b></p>
+        <button type="button" id="layApply" class="ghost">Use this Vf</button>
+      </details>
+      <div class="pair">
+        <label>Fibre angle to load, θ (deg)
+          <input type="range" id="angle" data-in min="0" max="90" step="1">
+        </label>
+        <input type="number" id="angle_n" data-in="angle" min="0" max="90" step="1" aria-label="Angle number">
+      </div>
+      <label>Manufacturing process
+        <select id="process" data-in></select>
+      </label>
+      <label>Void content (%)
+        <input type="number" id="voids" data-in min="0" max="15" step="0.1">
+      </label>
+    </section>
+
+    <section>
+      <h2>3. Specimen geometry</h2>
+      <div class="grid2">
+        <label>Gauge length (mm)<input type="number" id="gauge" data-in min="10" step="1"></label>
+        <label>Width (mm)<input type="number" id="width" data-in min="2" step="0.5"></label>
+        <label>Thickness (mm)<input type="number" id="thickness" data-in min="0.1" step="0.01"></label>
+        <label>Tab length, each end (mm)<input type="number" id="tab" data-in min="0" step="1"></label>
+      </div>
+      <p class="hint">Overall length <b id="lenOut">-</b> · cross-section <b id="areaOut">-</b></p>
+    </section>
+
+    <section>
+      <h2>4. Environment</h2>
+      <div class="pair">
+        <label>Test temperature (°C)
+          <input type="range" id="temp" data-in min="-60" max="200" step="1">
+        </label>
+        <input type="number" id="temp_n" data-in="temp" min="-100" max="300" step="1" aria-label="Temperature number">
+      </div>
+      <div class="pair">
+        <label>Humidity conditioning (% RH)
+          <input type="range" id="rh" data-in min="0" max="100" step="1">
+        </label>
+        <input type="number" id="rh_n" data-in="rh" min="0" max="100" step="1" aria-label="Humidity number">
+      </div>
+      <div class="chips" id="envChips">
+        <button type="button" data-env="23,50">RTD 23 °C / 50 %</button>
+        <button type="button" data-env="-40,0">CTD −40 °C</button>
+        <button type="button" data-env="80,0">ETD 80 °C</button>
+        <button type="button" data-env="70,85">ETW 70 °C / 85 %</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Machine and sampling</h2>
+      <div class="grid2">
+        <label>Load cell (kN)
+          <select id="capacity" data-in>
+            <option value="1">1</option><option value="5">5</option><option value="10">10</option>
+            <option value="50">50</option><option value="100">100</option><option value="250">250</option>
+          </select>
+        </label>
+        <label>Crosshead speed (mm/min)<input type="number" id="speed" data-in min="0.01" step="0.5"></label>
+        <label>Specimens (n)<input type="number" id="nspec" data-in min="1" max="30" step="1"></label>
+        <label>Random seed<input type="number" id="seed" data-in step="1"></label>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ===================== MACHINE ===================== -->
+  <section class="panel machine" aria-label="Testing machine">
+    <div class="machine-head">
+      <h2>Universal testing machine</h2>
+      <span id="status" class="badge">Ready</span>
+    </div>
+
+    <svg id="rig" viewBox="0 0 380 590" role="img" aria-label="Animated tensile testing machine with the specimen between the grips">
+      <defs>
+        <pattern id="fibrePat" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+          <rect width="5" height="5" fill="var(--spec-fill, #2b2f36)"/>
+          <line x1="2.5" y1="0" x2="2.5" y2="5" stroke="var(--spec-line, #5a6270)" stroke-width="1"/>
+        </pattern>
+        <linearGradient id="steel" x1="0" x2="1">
+          <stop offset="0" stop-color="var(--steel-a)"/><stop offset="0.5" stop-color="var(--steel-b)"/><stop offset="1" stop-color="var(--steel-a)"/>
+        </linearGradient>
+      </defs>
+      <!-- fixed frame -->
+      <rect x="30" y="22" width="320" height="26" rx="5" class="frame-dark"/>
+      <rect x="44" y="48" width="14" height="500" fill="url(#steel)" class="col"/>
+      <rect x="322" y="48" width="14" height="500" fill="url(#steel)" class="col"/>
+      <rect x="20" y="548" width="340" height="30" rx="6" class="frame-dark"/>
+      <text x="190" y="568" text-anchor="middle" class="plate-text">TENSILE TESTER</text>
+      <rect x="176" y="514" width="28" height="34" class="grip-body"/>
+      <!-- dynamic: chamber, upper assembly, specimen -->
+      <g id="dyn"></g>
+    </svg>
+
+    <p class="hint center" id="exagNote"></p>
+
+    <div class="readouts" aria-live="off">
+      <div class="ro"><span>Load</span><b id="roLoad">0.00</b><i>kN</i></div>
+      <div class="ro"><span>Crosshead</span><b id="roCross">0.000</b><i>mm</i></div>
+      <div class="ro"><span>Stress</span><b id="roStress">0.0</b><i>MPa</i></div>
+      <div class="ro"><span>Strain</span><b id="roStrain">0.000</b><i>%</i></div>
+      <div class="ro wide"><span>Elapsed</span><b id="roTime">00:00</b><i>min:s</i></div>
+    </div>
+
+    <div class="controls">
+      <button type="button" id="btnRun" class="primary">▶ Run test</button>
+      <button type="button" id="btnPause" disabled>Pause</button>
+      <button type="button" id="btnReset">Reset</button>
+      <button type="button" id="btnInstant" class="ghost">Show result instantly</button>
+      <label class="inline">Playback
+        <select id="playback">
+          <option value="auto" selected>Fit to about 8 s</option>
+          <option value="1">Real time</option>
+          <option value="10">10×</option>
+          <option value="50">50×</option>
+          <option value="200">200×</option>
+        </select>
+      </label>
+    </div>
+    <ul id="warnings" class="warnings"></ul>
+  </section>
+
+  <!-- ===================== RESULTS ===================== -->
+  <section class="results" aria-label="Results">
+    <div class="cards">
+      <div class="card key"><span>Young's modulus</span><b id="kE">-</b><i>GPa</i><small id="kEsub"></small></div>
+      <div class="card key"><span>Maximum tensile strength</span><b id="kS">-</b><i>MPa</i><small id="kSsub"></small></div>
+      <div class="card key"><span>Strain at failure</span><b id="kEps">-</b><i>%</i><small id="kEpsSub"></small></div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tabSS" class="on" aria-selected="true">Stress–strain</button>
+        <button role="tab" id="tabLD" aria-selected="false">Load–crosshead</button>
+        <button role="tab" id="tabSW" aria-selected="false">Parameter sweep</button>
+      </div>
+      <div id="sweepCtl" class="sweepctl" hidden>
+        <label class="inline">Vary
+          <select id="sweepVar">
+            <option value="vf">Fibre volume fraction</option>
+            <option value="angle">Fibre angle</option>
+            <option value="temp">Temperature</option>
+            <option value="rh">Humidity</option>
+            <option value="voids">Void content</option>
+          </select>
+        </label>
+      </div>
+      <label class="inline chk" id="scatterWrap"><input type="checkbox" id="scatter" checked> Overlay all simulated specimens</label>
+      <canvas id="chart" width="720" height="380" aria-label="Chart"></canvas>
+    </div>
+
+    <div class="panel">
+      <h2>Output parameters</h2>
+      <table class="kv" id="outTable"></table>
+      <div class="note-box" id="modeBox"></div>
+      <ul id="notes" class="notes"></ul>
+    </div>
+
+    <div class="panel">
+      <div class="row-head">
+        <h2>Simulated specimens (<span id="nOut">6</span>)</h2>
+        <div>
+          <button type="button" id="dlSpec" class="ghost">Download CSV</button>
+          <button type="button" id="dlCurve" class="ghost">Curve CSV</button>
+        </div>
+      </div>
+      <div class="scroll"><table class="data" id="specTable"></table></div>
+      <p class="hint" id="statNote"></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Educational simulation built from rule-of-mixtures and Halpin–Tsai micromechanics, Tsai–Hill off-axis strength, and empirical knock-down factors for process, voids, temperature, moisture and rate. Values are indicative, not design allowables. Replace with measured data (ASTM D3039 / ISO 527-5) for real decisions.
+</footer>
+
+<script src="js/model.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

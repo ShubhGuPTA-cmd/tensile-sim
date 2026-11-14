@@ -1,0 +1,11 @@
+{
+  "name": "composite-tensile-simulator",
+  "version": "1.0.0",
+  "description": "Localhost simulation of a tensile test on fibre-reinforced composites",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/model.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
